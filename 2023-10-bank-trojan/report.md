@@ -50,7 +50,7 @@ TODO
 | 3e399f9d6135376e2184e110660594ecffe1c0a8 | `Tributos_ep.vbs` |
 | 497aa3e1f74f72c0e6328335f675e05c8a3252b4 | `LockSessions.mpeg` |
 | 4b54da05c4e2ef0a4fc5892cf1dfc8d63fc1d898 | `Stacks.exe` |
-| bff682745e529580d1c3627b23f706f2f3c0d4b1 | `Illustrator.exe` |
+| bff682745e529580d1c3627b23f706f2f3c0d4b1 | `Illustrator.exe` | 
 | __Registry Keys__ |
 | -- | -- |
 |` SOFTWARE\MICROSOFT\WINDOWS\CURRENTVERSION\RUN\Avetor`|
@@ -113,17 +113,25 @@ Zip file size: 4720172 bytes, number of entries: 1
 
 ## File: Stacks.exe
 
-This is a somewhat large file for a dropper, at 17MB. Sections are the ones expected, plus some oddities, as pointed in a quick scan with [PE Bear](https://hshrzd.wordpress.com/pe-bear/). It seems that no packer was used.
+This is a somewhat large file for a dropper, at 17MB. Sections are the ones expected, plus some oddities, as pointed in a quick scan. It seems that no packer was used.
 
-Further quick look at headers and strings identify it as:
+Further quick look with Detect It Easy results in:
 
 - Windows GUI Application 64 bits
 - Name exported is LoginVCL.exe
-- Signature is x64 Embarcadero Delphi compiler XE7 - 2014 ( EXE ) - embarcadero.com - no sec. Cab.7z.Zip [ Win Vista ]
-- Relation to further files to be dropped
 - Has debug information (??)
+- Operation system: Windows(Vista)[AMD64, 64-bit, GUI]
+- Linker: Turbo linker(8.00)
+- Compiler: Embarcadero Object Pascal(Delphi)(35.0 (28.0.44500.8973))
+- Language: Object Pascal(Delphi)
+- Library: Visual Component Library
+- Tool: Embarcadero Delphi(11.0 Alexandria)
 
-The large filesize is actually due to a `.debug` section included in the file, which contains debug information in the typical Delphi TDS format. By dumping the section we get an TDS file with debug information to be used. IDA will also process it.
+
+From the signatures we see, this looks like a variant of `TrojanBanker:Win32/Banbra` or `Trojan:Win32/ScarletFlash.A`. The strings present are different from the original, but the similarities are relevant. It also uses Portuguese strings and commands.
+
+
+The large file size is actually due to a `.debug` section included in the file, which contains debug information in the typical Delphi TDS format. By dumping the section we get an TDS file with debug information to be used. IDA will also process it.
 
 
 The file is standard GUI application with a form. Three timers are included in the application, and the malicious code actually is called from the Timers:
@@ -160,7 +168,7 @@ The rest of the timer will check if a folder `C:\AutCAD` exists and download a f
 
 ![Download code](resources/stacks_exe_download.png)
 
-The files seem to come from the same S3 bucket: `hxxps://comprovativos2022e2023[.]s3[.]amazonaws[.]com`. Currently, there is no reference in VT or other platform to this bucket.
+The files seem to come from the same S3 bucket: `hxxps://comprovativos2022e2023[.]s3[.]amazonaws[.]com`. Currently, there is no reference in VT or other platform to this bucket, but this may change rapidly.
 
 After the download is completed, the files are executed in another Timer, using the variables `nma` and `nma2` to pass the filename to the functions.
 
@@ -172,9 +180,19 @@ The file `arcor.mpeg` is saved to `Illustrator.exe` while the file `bright.mpeg`
 
 ## File: Illustrator.exe
 
-This file is similar to the downloader, as it was created in Delphi and also contains debug information (!?). From a quick analysis it seems like it does nothing, as the Timers have no relevant information.
+This file is similar to the downloader, as it was created in Delphi and also contains debug information (!?). A quick analysis reveals several other forms besides the main one, with other Timers. We will describe each function in those timers. It follows the same pattern as the previous file, and it was created with the same toolkit.
 
-A quick analysis reveals several other forms, with other Timers. We will describe each function in those timers.
+From Detect It Easy:
+
+- Operation system: Windows(Vista)[AMD64, 64-bit, GUI]
+- Linker: Turbo linker(8.00)
+- Compiler: Embarcadero Object Pascal(Delphi)(35.0 (28.0.44500.8973))
+- Language: Object Pascal(Delphi)
+- Library: Visual Component Library
+- Tool: Embarcadero Delphi(11.0 Alexandria)
+
+The entire operation of this malware is through Timers in Forms, which later start and stop threads. Operations supported are the ones expected in a Banker Trojan: spy on users, receive commands, upload data and persist. The program is low on resources and tries be dissimulated through its name and icon (A sound speaker... which doesn't match Illustrator).
+
 
 ### Persistence
 
@@ -182,31 +200,57 @@ One of the Timers will write a key to the registry so that the malware will star
 
 ![Write key to registry](resources/illustrator_exe_write_key.png)
 
-With this key, the malware will persist across reboots, being started at startup.
+With this key, the malware will persist across reboots, being started at startup. The way it is implemented only seems to work if the malware is at those specific locations. It is unknown to us the meaning o `Avetor`.
 
 
 
-### Bank Credential Stealer
+### Bank Info Stealer
 
-Another Thread will periodically poll the available windows, looking for patterns in its title. By the strings contained, it included 38 banks, all from Portugal, which is probably most commercial banks. It uses `Winapi::Windows::GetWindowTextLength` to get the number of characters, then `Winapi::Windows::GetWindowText`, cleans the string (only keeps `0123456789abcdefghijklmnopqrstuvwxyz-`), and compares the result with all the precompiled strings. Interestingly, these strings are hardcoded in the code, and are not resources are the rest.
+Another Thread will periodically poll the available windows, looking for patterns in its title. By the strings contained, it included 38 banks, all from Portugal, which is probably most commercial banks. It uses `Winapi::Windows::GetWindowTextLength` to get the number of characters, then `Winapi::Windows::GetWindowText`, cleans the string (only keeps `0123456789abcdefghijklmnopqrstuvwxyz-`), and compares the result with all the precompiled strings. Interestingly, these strings are hardcoded in the code, and are not resources as the rest.
 
 ![Bank matching strings](resources/illustrator_exe_banks.png)
+
+This is used to launch an overlay attack in an attempt to get the user input, such as credentials. Data captured is combined with the Computer Name, encrypted, and then sent to a C2 server as an `HTTP PUT` method. In the case of this sample, the destination URL used is `hxxp://89[.]223[.]127[.]198/jbl/index.php`.
+
+[!Bank keys upload](resources/illustrator_exe_kb_put.png)
+
+As referred, the data is encrypted before being upload (hey, user safety first!). The encryption method is a very simple `XOR` of the data with a static key `YUQL23KL23DF90WI5E1JAS467NMCXXL6JAOAUWWMCL0AOMM4A4VZYW9KHJUI2347EJHJKDF3424S KL K3LAKDJSL9RTIKJ`. Interestingly, the malware has two similar encryption methods, which are able to both encrypt and decrypt data based on a argument. The code different, and also, one requires `C` (cifrar?) to select the encryption mode, while the other requires `E` (encrypt?). `D` (decifrar/decrypt?) is used in both cases to select a decryption. This points to copy and past of code, and a overall rough construction.
 
 
 
 ### Screen capture
 
-The malware has the capability to capture images of the desktop. It is not continuously recording, but will periodically check for a condition, and then capture images with low or high quality (selectable). The capture is triggered by two global variables that, when set, trigger the screenshot with two levels of quality.
+The malware has the capability to capture images of the desktop. It is not continuously recording, but will periodically check for a condition, and then capture images with low or high quality (selectable). The capture is triggered by two global variables that, when set, trigger the screenshot with two different methods.
 
 ![Screen capture](resources/illustrator_exe_screen_capture.png)
 
-The resulting image is uploaded to a `php` script, using an `HTTP PUT`` method.
+The resulting image is uploaded to a `php` script, using an `HTTP PUT` method. The server is the same, as well as the `index.php` resource. However this time the malware didn't encrypt the data.
 
 ![Image upload](resources/illustrator_exe_screen_capture_put.png)
 
 
 ### Remote Configuration
 
+Another Time, and operation of this variant is the capability to download a configuration from a remote server. The server is distinct from the previous one and is hosted in a public provider: `https://s3[.]timeweb[.com/41907bc4-chronocromdocrom/one/cnf[.]txt`
+
+![Configuration download](illustrator_exe_download_conf.png)
+
+At the time of writing, the result was the following string:
+
+`MrP1Kab1LaL9KqzBNGqAQ7HqS3elBpGrBZWkEJOkCJCmBs5gSoyD2cXqT70wBoyqDIuuBZasBZ4pC2zXQdCl3GfeT7HmEYylD3KkE2uvDYunCp0lOMfpBmqAQ7HqS3elBpGrBZWkEJOkCJCmBs5gSoyD2cXqT70wBoyqDIuuBZasBZ4pC2zXQdCl3GfeT7HmEYylD3KkE2uvDYunCp0lOMfpBmqAQ7HqS3elBpGrBZWkEJOkCJCmBs5gSoyD2cXqT70wBoyqDIuuBZasBZ4pC2zXQdCl3GfeT7HmEYylD3KkE2uvDYunCp0lOMfpBmqAQ7HqS3elBpGrBZWkEJOkCJCmBs5gSoyD2cXqT70wBoyqDIuuBZasBZ4pC2zXQdCl3GfeT7HmEYylD3KkE2uvDYunCp0lOMfpBmqAMq5KLK5CILf1JqPT3GenE30t3GfiR0qACWqAS79mS0`
+
+It is encoded using Base64 as defined in [RFC 4880](https://datatracker.ietf.org/doc/html/rfc4880), which uses an alternative alphabet: `0-9A-Za-z+/=`.
+After decoding with this alphabet, the result is the following block:
+
+![Configuration file](illustrator_exe_cnf.png)
+
+In order to check if the file is legit, the code has two static strings `3DC041CC50AAD31D5799B452D37E` and `XVNO38759`. The first is an encrypted string, while the second is the key. Decryption will convert every two bytes of the text to integer (from hex), `XOR` it with the key and subtract the value from the previous value. The result is `[VARIAVEISOK]`, which is compared with the first line of the configuration. If it matches, the configuration file is correct.
+
+
+
+
+
+### Command and Control
 
 
 
