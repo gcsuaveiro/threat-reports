@@ -29,37 +29,37 @@ titlepage-rule-height: 20
 titlepage-background: "template/background.pdf"
 ---
 
-# Summary
+# Analysis of Bank Trojan Targeting Portuguese Banks
 
 ## Executive Summary
 
 TODO
 
-## Chain
-
-
-## Mitre Att@ck
-
 
 
 ## IOCs
 
-| __Files__ | |
-| -- | -- |
-| Hash | Artifact |
-| 3e399f9d6135376e2184e110660594ecffe1c0a8 | `Tributos_ep.vbs` |
-| 497aa3e1f74f72c0e6328335f675e05c8a3252b4 | `LockSessions.mpeg` |
-| 4b54da05c4e2ef0a4fc5892cf1dfc8d63fc1d898 | `Stacks.exe` |
-| bff682745e529580d1c3627b23f706f2f3c0d4b1 | `Illustrator.exe` | 
-| __Registry Keys__ |
-| -- | -- |
+| __Files__ |  |  |
+| -- | -- | -- |
+| Hash | Artifact | External Analysis |
+| 3e399f9d6135376e2184e110660594ecffe1c0a8 | `Tributos_ep.vbs` |  |
+| 497aa3e1f74f72c0e6328335f675e05c8a3252b4 | `LockSessions.mpeg` |  |
+| 4b54da05c4e2ef0a4fc5892cf1dfc8d63fc1d898 | `Stacks.exe` | [Joes Sandbox][joes_stacks.exe], [VirusTotal][vt_stacks.exe] |
+| bff682745e529580d1c3627b23f706f2f3c0d4b1 | `Illustrator.exe` | [Joes Sandbox][joes_illustrator.exe], [VirusTotal][vt_illustrator.exe]  |
+
+
+| __Registry Keys__ | | |
+| -- | -- | -- |
 |` SOFTWARE\MICROSOFT\WINDOWS\CURRENTVERSION\RUN\Avetor`|
-| __URLs__ |
-| -- | -- |
+
+| __URLs__ | | |
+| -- | -- | -- |
 | `hxxps://comprovativos2022e2023[.]s3[.]amazonaws[.]com` |
-| __IP Addressses__ |
+
+| __IP Addressses__ | |
 | -- | -- |
-| |
+|  |  |
+
 
 
 # Analysis
@@ -212,7 +212,7 @@ Another Thread will periodically poll the available windows, looking for pattern
 
 This is used to launch an overlay attack in an attempt to get the user input, such as credentials. Data captured is combined with the Computer Name, encrypted, and then sent to a C2 server as an `HTTP PUT` method. In the case of this sample, the destination URL used is `hxxp://89[.]223[.]127[.]198/jbl/index.php`.
 
-[!Bank keys upload](resources/illustrator_exe_kb_put.png)
+![Bank keys upload](resources/illustrator_exe_kb_put.png)
 
 As referred, the data is encrypted before being upload (hey, user safety first!). The encryption method is a very simple `XOR` of the data with a static key `YUQL23KL23DF90WI5E1JAS467NMCXXL6JAOAUWWMCL0AOMM4A4VZYW9KHJUI2347EJHJKDF3424S KL K3LAKDJSL9RTIKJ`. Interestingly, the malware has two similar encryption methods, which are able to both encrypt and decrypt data based on a argument. The code different, and also, one requires `C` (cifrar?) to select the encryption mode, while the other requires `E` (encrypt?). `D` (decifrar/decrypt?) is used in both cases to select a decryption. This points to copy and past of code, and a overall rough construction.
 
@@ -231,9 +231,9 @@ The resulting image is uploaded to a `php` script, using an `HTTP PUT` method. T
 
 ### Remote Configuration
 
-Another Time, and operation of this variant is the capability to download a configuration from a remote server. The server is distinct from the previous one and is hosted in a public provider: `https://s3[.]timeweb[.com/41907bc4-chronocromdocrom/one/cnf[.]txt`
+Another Timer, and operation of this variant is the capability to download a configuration from a remote server. The server is distinct from the previous one and is hosted in a public provider: `https://s3[.]timeweb[.com/41907bc4-chronocromdocrom/one/cnf[.]txt`
 
-![Configuration download](illustrator_exe_download_conf.png)
+![Configuration download](resources/illustrator_exe_download_conf.png)
 
 At the time of writing, the result was the following string:
 
@@ -242,21 +242,39 @@ At the time of writing, the result was the following string:
 It is encoded using Base64 as defined in [RFC 4880](https://datatracker.ietf.org/doc/html/rfc4880), which uses an alternative alphabet: `0-9A-Za-z+/=`.
 After decoding with this alphabet, the result is the following block:
 
-![Configuration file](illustrator_exe_cnf.png)
+![Configuration file](resources/illustrator_exe_cnf.png)
 
-In order to check if the file is legit, the code has two static strings `3DC041CC50AAD31D5799B452D37E` and `XVNO38759`. The first is an encrypted string, while the second is the key. Decryption will convert every two bytes of the text to integer (from hex), `XOR` it with the key and subtract the value from the previous value. The result is `[VARIAVEISOK]`, which is compared with the first line of the configuration. If it matches, the configuration file is correct.
+In order to check if the file is legit, the code has two static strings `3DC041CC50AAD31D5799B452D37E` and `XVNO38759`. The first is an encrypted string, while the second is the key. Decryption will convert every two bytes of the text to integer (from hex), `XOR` it with the key and subtract the value from the previous value. The result is `[VARIAVEISOK]`, which is compared with the first line of the configuration. If it matches, the configuration file is considered to be correct.
 
+The purpose of the individuals tokens is still under analysis. We suspect the address provided is another C2 server used to upload information. 
 
+Accessing the server provided we get a standard Ubuntu Apache2 webpage. Accessing the URL, specifying or not `index.php`, the page is found an returns an integer. The behavior seems to be similar if we use the previously identified IP or this one.
 
 
 
 ### Command and Control
 
 
+Commands are:
+
+| Command | Meaning |
+| -- | -- |
+| `phots` |  |
+| `qualimg` | |
+| `imgra` | |
+| `Start DownL` | |
+| `rstall` | |
+| `Restart SYS...` |   |
+| `lstgeral` | |
+| `rest chk...` |  |
+| `mtarq` |   |
+| `K File...` |   |
 
 
-## File: Autodesk.exe
 
 
 
-
+[joes_stacks.exe]: https://www.joesandbox.com/analysis/1336028
+[vt_stacks.exe]: https://www.virustotal.com/gui/file/338c7ce6cfaf374389e6739c4e4f3bd0dfde4c6335e7edf625a827fbc2a572dc
+[vt_illustrator.exe]: https://www.virustotal.com/gui/file/05d1a67adf35f652c52c6a6235cc44dfdd2e13f0d0ca6cdd62dbe7eac63588b6
+[joes_illustrator.exe]: https://www.joesandbox.com/analysis/1337308
