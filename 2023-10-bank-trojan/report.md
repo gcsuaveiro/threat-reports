@@ -31,38 +31,6 @@ titlepage-background: "template/background.pdf"
 
 # Analysis of Bank Trojan Targeting Portuguese Banks
 
-## Executive Summary
-
-TODO
-
-
-
-## IOCs
-
-| __Files__ |  |  |
-| -- | -- | -- |
-| Hash | Artifact | External Analysis |
-| 3e399f9d6135376e2184e110660594ecffe1c0a8 | `Tributos_ep.vbs` |  |
-| 497aa3e1f74f72c0e6328335f675e05c8a3252b4 | `LockSessions.mpeg` |  |
-| 4b54da05c4e2ef0a4fc5892cf1dfc8d63fc1d898 | `Stacks.exe` | [Joes Sandbox][joes_stacks.exe], [VirusTotal][vt_stacks.exe] |
-| bff682745e529580d1c3627b23f706f2f3c0d4b1 | `Illustrator.exe` | [Joes Sandbox][joes_illustrator.exe], [VirusTotal][vt_illustrator.exe]  |
-
-
-| __Registry Keys__ | | |
-| -- | -- | -- |
-|` SOFTWARE\MICROSOFT\WINDOWS\CURRENTVERSION\RUN\Avetor`|
-
-| __URLs__ | | |
-| -- | -- | -- |
-| `hxxps://comprovativos2022e2023[.]s3[.]amazonaws[.]com` |
-
-| __IP Addressses__ | |
-| -- | -- |
-|  |  |
-
-
-
-# Analysis
 
 The threat arrived through an email from an external address, in what is a typical phishing attempt.
 After some analysis, we were interested in it as it had several relevant redirections and artifacts. Most importantly, it was developed in Delphi, and some training is always welcome!
@@ -119,7 +87,6 @@ Further quick look with Detect It Easy results in:
 
 - Windows GUI Application 64 bits
 - Name exported is LoginVCL.exe
-- Has debug information (??)
 - Operation system: Windows(Vista)[AMD64, 64-bit, GUI]
 - Linker: Turbo linker(8.00)
 - Compiler: Embarcadero Object Pascal(Delphi)(35.0 (28.0.44500.8973))
@@ -129,10 +96,6 @@ Further quick look with Detect It Easy results in:
 
 
 From the signatures we see, this looks like a variant of `TrojanBanker:Win32/Banbra` or `Trojan:Win32/ScarletFlash.A`. The strings present are different from the original, but the similarities are relevant. It also uses Portuguese strings and commands.
-
-
-The large file size is actually due to a `.debug` section included in the file, which contains debug information in the typical Delphi TDS format. By dumping the section we get an TDS file with debug information to be used. IDA will also process it.
-
 
 The file is standard GUI application with a form. Three timers are included in the application, and the malicious code actually is called from the Timers:
 
@@ -180,7 +143,7 @@ The file `arcor.mpeg` is saved to `Illustrator.exe` while the file `bright.mpeg`
 
 ## File: Illustrator.exe
 
-This file is similar to the downloader, as it was created in Delphi and also contains debug information (!?). A quick analysis reveals several other forms besides the main one, with other Timers. We will describe each function in those timers. It follows the same pattern as the previous file, and it was created with the same toolkit.
+This file is similar to the downloader, as it was created in Delphi. A quick analysis reveals several other forms besides the main one, with other Timers. We will describe each function in those timers. It follows the same pattern as the previous file, and it was created with the same toolkit.
 
 From Detect It Easy:
 
@@ -210,13 +173,12 @@ Another Thread will periodically poll the available windows, looking for pattern
 
 ![Bank matching strings](resources/illustrator_exe_banks.png)
 
-This is used to launch an overlay attack in an attempt to get the user input, such as credentials. Data captured is combined with the Computer Name, encrypted, and then sent to a C2 server as an `HTTP PUT` method. In the case of this sample, the destination URL used is `hxxp://89[.]223[.]127[.]198/jbl/index.php`.
+This is used to launch an attack in an attempt to get the user input, such as credentials. Data captured is combined with the Computer Name, encrypted, and then sent to a C2 server as an `HTTP PUT` method. In the case of this sample, the destination URL used is `hxxp://89[.]223[.]127[.]198/jbl/index.php`.
 
 ![Bank keys upload](resources/illustrator_exe_kb_put.png)
+![Bank info upload and integer](resources/illustrator_exe_integer.png)
 
 As referred, the data is encrypted before being upload (hey, user safety first!). The encryption method is a very simple `XOR` of the data with a static key `YUQL23KL23DF90WI5E1JAS467NMCXXL6JAOAUWWMCL0AOMM4A4VZYW9KHJUI2347EJHJKDF3424S KL K3LAKDJSL9RTIKJ`. Interestingly, the malware has two similar encryption methods, which are able to both encrypt and decrypt data based on a argument. The code different, and also, one requires `C` (cifrar?) to select the encryption mode, while the other requires `E` (encrypt?). `D` (decifrar/decrypt?) is used in both cases to select a decryption. This points to copy and past of code, and a overall rough construction.
-
-
 
 ### Screen capture
 
@@ -224,10 +186,13 @@ The malware has the capability to capture images of the desktop. It is not conti
 
 ![Screen capture](resources/illustrator_exe_screen_capture.png)
 
-The resulting image is uploaded to a `php` script, using an `HTTP PUT` method. The server is the same, as well as the `index.php` resource. However this time the malware didn't encrypt the data.
+The resulting image is uploaded to a `PHP` script, using an `HTTP PUT` method. The server is the same, as well as the `index.php` resource. However this time the malware didn't encrypt the data.
 
 ![Image upload](resources/illustrator_exe_screen_capture_put.png)
 
+Taking in consideration the integer provided by the C2 server, upload is made to a script with its name. The following image depicts the process of uploading user data and then an image.
+
+![Packet capture of the upload process](resources/illustrator_exe_upload_packets.png)
 
 ### Remote Configuration
 
@@ -246,9 +211,9 @@ After decoding with this alphabet, the result is the following block:
 
 In order to check if the file is legit, the code has two static strings `3DC041CC50AAD31D5799B452D37E` and `XVNO38759`. The first is an encrypted string, while the second is the key. Decryption will convert every two bytes of the text to integer (from hex), `XOR` it with the key and subtract the value from the previous value. The result is `[VARIAVEISOK]`, which is compared with the first line of the configuration. If it matches, the configuration file is considered to be correct.
 
-The purpose of the individuals tokens is still under analysis. We suspect the address provided is another C2 server used to upload information. 
 
-Accessing the server provided we get a standard Ubuntu Apache2 webpage. Accessing the URL, specifying or not `index.php`, the page is found an returns an integer. The behavior seems to be similar if we use the previously identified IP or this one.
+
+Accessing the server provided we get a standard Ubuntu Apache2 webpage. Accessing the URL, specifying or not `index.php`, the page is found an returns an integer. The behavior seems to be similar if we use the previously identified IP or this one. The integer returned, represents the location of a `PHP`` script, providing further functionality.
 
 
 
@@ -259,19 +224,48 @@ Commands are:
 
 | Command | Meaning |
 | -- | -- |
-| `phots` |  |
-| `qualimg` | |
-| `imgra` | |
-| `Start DownL` | |
-| `rstall` | |
-| `Restart SYS...` |   |
-| `lstgeral` | |
-| `rest chk...` |  |
-| `mtarq` |   |
-| `K File...` |   |
+| `qualimg` | Sets image quality |
+| `imgra` | Downloads and executes file (EXE or DLL) |
+| `rstall` | Restart Computer |
+| `lstgeral` | Enables Timer |
+| `mtarq` | Kill Process  |
 
 
 
+
+
+
+## IOCs
+
+| __Files__ |  |  |
+| -- | -- | -- |
+| Hash | Artifact | External Analysis |
+| 3e399f9d6135376e2184e110660594ecffe1c0a8 | `Tributos_ep.vbs` |  |
+| 497aa3e1f74f72c0e6328335f675e05c8a3252b4 | `LockSessions.mpeg` |  |
+| 4b54da05c4e2ef0a4fc5892cf1dfc8d63fc1d898 | `Stacks.exe` | [Joes Sandbox][joes_stacks.exe], [VirusTotal][vt_stacks.exe] |
+| bff682745e529580d1c3627b23f706f2f3c0d4b1 | `Illustrator.exe` | [Joes Sandbox][joes_illustrator.exe], [VirusTotal][vt_illustrator.exe]  |
+
+
+| __Registry Keys__ | | |
+| -- | -- | -- |
+|` SOFTWARE\MICROSOFT\WINDOWS\CURRENTVERSION\RUN\Avetor`|
+
+| __URLs__ | | |
+| -- | -- | -- |
+| `hxxps://comprovativos2022e2023[.]s3[.]amazonaws[.]com` |
+| `hxxps://s3[.]timeweb[.]com/41907bc4-chronocromdocrom/one/cnf[.]txt`
+
+| __IP Addressses__ | 
+| -- | 
+|  45[.]8[.]96[.]130| 
+|  89[.]223[.]127[.]198
+|  18[.]216[.]79[.]21
+| 
+
+
+## Remarks
+
+Comments are corrections are welcome at gcs[.]ua.pt
 
 
 [joes_stacks.exe]: https://www.joesandbox.com/analysis/1336028
