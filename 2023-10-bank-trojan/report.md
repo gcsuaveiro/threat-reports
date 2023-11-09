@@ -265,7 +265,7 @@ Commands are:
 
 ## Remarks
 
-Comments are corrections are welcome at gcs[.]ua.pt
+Comments are corrections are welcome at gcs@ua[.]pt
 
 
 [joes_stacks.exe]: https://www.joesandbox.com/analysis/1336028
